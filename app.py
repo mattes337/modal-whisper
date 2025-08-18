@@ -4,37 +4,23 @@ from typing import Optional, Annotated
 from pydantic import BaseModel, Field
 import tempfile
 import os
-import json
+import modal
+from whisperx_transcribe import WhisperX
 
 app = FastAPI(title="Modal WhisperX API", description="OpenAI Whisper API compatible transcription service using Modal and WhisperX")
 
-class TranscriptionRequest(BaseModel):
-    file: str
-    model: Optional[str] = Field(default="whisper-1")
-    prompt: Optional[str] = Field(default=None)
-    response_format: Optional[str] = Field(default="json")
-    temperature: Optional[float] = Field(default=0)
-    language: Optional[str] = Field(default=None)
-
-# Mock transcription function for testing
-def mock_transcribe(audio_data: bytes) -> dict:
-    """Mock transcription function for testing purposes"""
-    return {
-        "language": "en",
-        "segments": [
-            {
-                "start": 0.0,
-                "end": 5.0,
-                "text": "This is a mock transcription segment."
-            },
-            {
-                "start": 5.0,
-                "end": 10.0,
-                "text": "This demonstrates the API functionality."
-            }
-        ],
-        "duration": 10.0
-    }
+# Initialize Modal app connection
+try:
+    # Try newer Modal API first
+    try:
+        modal_app = modal.App.lookup("example-whisperx-transcribe")
+    except AttributeError:
+        # Fallback to older API
+        modal_app = modal.App.from_name("example-whisperx-transcribe", create_if_missing=False)
+    USE_MODAL = True
+except Exception as e:
+    print(f"Warning: Could not connect to Modal app: {e}")
+    USE_MODAL = False
 
 @app.post("/v1/audio/transcriptions")
 async def create_transcription(
@@ -66,9 +52,13 @@ async def create_transcription(
         # Read audio file
         audio_data = await file.read()
         
-        # Use mock transcription for testing
-        # In production, replace this with actual Modal WhisperX integration
-        result = mock_transcribe(audio_data)
+        if not USE_MODAL:
+            raise HTTPException(status_code=503, detail="Modal service not available. Please ensure Modal app is deployed and accessible.")
+        
+        # Get WhisperX instance from Modal
+        transcriber = WhisperX()
+        # Transcribe audio
+        result = transcriber.transcribe.remote(audio_data)
         
         # Format response based on requested format
         if response_format == "json":
@@ -107,13 +97,20 @@ async def create_transcription(
             
             return JSONResponse(content=response_data)
     
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 503) without wrapping
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy", "service": "modal-whisperx"}
+    return {
+        "status": "healthy", 
+        "service": "modal-whisperx",
+        "modal_connected": USE_MODAL
+    }
 
 @app.get("/")
 async def root():
@@ -121,6 +118,7 @@ async def root():
     return {
         "service": "Modal WhisperX API",
         "description": "OpenAI Whisper API compatible transcription service",
+        "modal_connected": USE_MODAL,
         "endpoints": {
             "transcription": "/v1/audio/transcriptions",
             "health": "/health"

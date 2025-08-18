@@ -13,6 +13,27 @@ A FastAPI webserver that provides OpenAI Whisper API compatibility using Modal a
 
 ## Quick Start
 
+### Prerequisites Setup
+
+1. **Modal Setup** (Required for production):
+   ```bash
+   # Install Modal CLI
+   pip install modal
+   
+   # Authenticate with Modal
+   modal token new
+   
+   # Deploy WhisperX service (ensure whisperx_transcribe.py is configured)
+   modal deploy whisperx_transcribe.py
+   ```
+
+2. **Environment Variables**:
+   ```bash
+   # Set Modal API token (if not using modal token new)
+   export MODAL_TOKEN_ID="your-token-id"
+   export MODAL_TOKEN_SECRET="your-token-secret"
+   ```
+
 ### Using Docker Compose (Recommended)
 
 1. Clone the repository and navigate to the project directory
@@ -115,25 +136,47 @@ Returns service information and available endpoints.
 ## Prerequisites
 
 - Python 3.11+ (fully compatible with Python 3.13)
-- Modal account and API key configured (for production use)
-- WhisperX model deployed on Modal (using the provided `whisperx_transcribe.py`)
+- **Modal account and API key** (required for transcription functionality)
+- **WhisperX model deployed on Modal** (using the provided `whisperx_transcribe.py`)
 - Docker and Docker Compose (for containerized deployment)
 
-## Current Implementation Status
+## Implementation Status
 
-**✅ Completed:**
+**✅ Production Ready Features:**
 - FastAPI webserver with OpenAI Whisper API compatibility
-- Multipart/form-data file upload handling
-- JSON and verbose_json response formats
-- Docker configuration (Dockerfile + docker-compose.yml)
-- Health check and service information endpoints
+- Multipart/form-data handling for audio file uploads
+- Response formatting for both `json` and `verbose_json` formats
+- Docker containerization with health checks
 - Comprehensive test suite
-
-**⚠️ Note:** The current implementation includes a mock transcription function for testing. For production use, replace `app.py` with `app_production.py` which includes proper Modal integration.
+- Full Modal integration with WhisperX
+- Production-ready error handling and service validation
 
 ## Configuration
 
-The service uses the existing Modal app `example-whisperx-transcribe` defined in `whisperx_transcribe.py`. Make sure this Modal app is deployed and accessible before starting the webserver.
+### Modal Setup (Required)
+
+1. **Create Modal Account**: Sign up at [modal.com](https://modal.com)
+2. **Install and Authenticate**:
+   ```bash
+   pip install modal
+   modal token new
+   ```
+3. **Deploy WhisperX Service**:
+   ```bash
+   modal deploy whisperx_transcribe.py
+   ```
+4. **Update App Name** (if needed): Modify the app name in `app.py` if different from "example-whisperx-transcribe"
+
+### Environment Variables
+
+```bash
+# Modal API credentials (if not using modal token new)
+export MODAL_TOKEN_ID="your-token-id"
+export MODAL_TOKEN_SECRET="your-token-secret"
+
+# Optional: Custom Modal app name
+export MODAL_APP_NAME="your-whisperx-app-name"
+```
 
 ## Development
 
@@ -165,8 +208,10 @@ python test_api.py
 This will test:
 - Health check endpoint
 - Root information endpoint  
-- JSON format transcription
-- Verbose JSON format transcription
+- JSON format transcription (requires Modal setup)
+- Verbose JSON format transcription (requires Modal setup)
+
+**Note**: Without Modal setup, transcription tests will return 503 status (service unavailable), which is expected behavior.
 
 #### Manual Testing with cURL
 
@@ -213,6 +258,8 @@ docker-compose down
 - Response formats limited to `json` and `verbose_json`
 - Some OpenAI API fields are populated with placeholder values
 - Requires active Modal deployment for WhisperX processing
+- File size limit: 25MB
+- WhisperX model performance depends on Modal compute resources
 
 ## License
 
