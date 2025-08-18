@@ -26,12 +26,12 @@ A FastAPI webserver that provides OpenAI Whisper API compatibility using Modal a
    modal token new
    
    # Deploy WhisperX service - THIS IS REQUIRED!
-   modal deploy whisperx_transcribe.py
+   modal deploy modal_whisper_transcribe.py
    
    # Verify deployment succeeded
    modal app list
    ```
-   ✅ You should see `example-whisperx-transcribe` listed as a deployed app.
+   ✅ You should see `modal-whisper-transcribe` listed as a deployed app.
 
 2. **Environment Variables** (Optional if using `modal token new`):
    ```bash
@@ -143,7 +143,7 @@ Returns service information and available endpoints.
 
 - Python 3.11+ (fully compatible with Python 3.13)
 - **Modal account and API key** (required for transcription functionality)
-- **WhisperX model deployed on Modal** (using the provided `whisperx_transcribe.py`)
+- **WhisperX model deployed on Modal** (using the provided `modal_whisper_transcribe.py`)
 - Docker and Docker Compose (for containerized deployment)
 
 ## Environment Configuration
@@ -158,7 +158,7 @@ Returns service information and available endpoints.
    MODAL_TOKEN_ID=your_modal_token_id_here
    MODAL_TOKEN_SECRET=your_modal_token_secret_here
    MODAL_ENVIRONMENT=main
-   MODAL_APP_NAME=example-whisperx-transcribe
+   MODAL_APP_NAME=modal-whisper-transcribe
    ```
 
 3. Get your Modal credentials from [Modal Settings](https://modal.com/settings)
@@ -188,16 +188,16 @@ Returns service information and available endpoints.
    ```
 3. **Deploy WhisperX Service** (Critical Step):
    ```bash
-   modal deploy whisperx_transcribe.py
+   modal deploy modal_whisper_transcribe.py
    ```
    
    **Verify deployment**:
    ```bash
    modal app list
    ```
-   You should see `example-whisperx-transcribe` in the list of running apps.
+   You should see `modal-whisper-transcribe` in the list of running apps.
 
-4. **Update App Name** (if needed): Modify the app name in `app.py` if different from "example-whisperx-transcribe"
+4. **Update App Name** (if needed): Modify the app name in `app.py` if different from "modal-whisper-transcribe"
 
 ### Environment Variables
 
@@ -208,6 +208,10 @@ export MODAL_TOKEN_SECRET="your-token-secret"
 
 # Optional: Custom Modal app name
 export MODAL_APP_NAME="your-whisperx-app-name"
+
+# Optional: WhisperX configuration
+export WHISPERX_GPU="T4"          # GPU type (T4, A10G, A100, etc.)
+export WHISPERX_MODEL="large-v2"   # Model size (tiny, base, small, medium, large, large-v2, large-v3)
 ```
 
 ## Development
@@ -217,7 +221,7 @@ export MODAL_APP_NAME="your-whisperx-app-name"
 ```
 .
 ├── app.py                    # FastAPI webserver
-├── whisperx_transcribe.py    # Modal WhisperX service
+├── modal_whisper_transcribe.py    # Modal WhisperX service
 ├── requirements.txt          # Python dependencies
 ├── Dockerfile               # Docker configuration
 ├── docker-compose.yml       # Docker Compose setup
@@ -248,6 +252,27 @@ This will test:
 - **Without Modal deployed**: Transcription tests will fail with 500 error: `"Function has not been hydrated with the metadata it needs to run on Modal, because the App it is defined on is not running."` (Note: This error message is misleading - Modal apps don't need to be continuously running)
 
 **If transcription tests fail**: See the [Troubleshooting](#troubleshooting) section below.
+
+#### Local Testing with WhisperX
+
+The `modal_whisper_transcribe.py` file includes a local entrypoint for testing the WhisperX transcription directly without the API server:
+
+```bash
+# Test with a local audio file
+modal run modal_whisper_transcribe.py --audio-file audio.wav
+
+# Test with a remote audio file URL
+modal run modal_whisper_transcribe.py --audio-link https://example.com/audio.wav
+
+# Test with default sample audio (no arguments)
+modal run modal_whisper_transcribe.py
+```
+
+This local entrypoint:
+- Downloads and transcribes audio files directly
+- Outputs transcription results with language detection and timing information
+- Saves results to `transcription.json` for inspection
+- Useful for testing WhisperX functionality independently of the API server
 
 #### Manual Testing with cURL
 
@@ -300,18 +325,18 @@ docker-compose down
 
 1. **Deploy the Modal app**:
    ```bash
-   modal deploy whisperx_transcribe.py
+   modal deploy modal_whisper_transcribe.py
    ```
 
 2. **Verify the app is deployed**:
    ```bash
    modal app list
    ```
-   Look for `example-whisperx-transcribe` in the deployed apps list. Note: Modal apps don't need to be "running" - they start automatically when called.
+   Look for `modal-whisper-transcribe` in the deployed apps list. Note: Modal apps don't need to be "running" - they start automatically when called.
 
 3. **Check app logs** (if deployment fails):
    ```bash
-   modal app logs example-whisperx-transcribe
+   modal app logs modal-whisper-transcribe
    ```
 
 4. **Ensure Modal authentication**:
@@ -341,7 +366,7 @@ docker-compose down
    uvicorn app:app --host 0.0.0.0 --port 8000
    ```
 2. Verify Modal app is deployed (see issue #1 above)
-3. Check that the Modal app name matches between `whisperx_transcribe.py` and your environment
+3. Check that the Modal app name matches between `modal_whisper_transcribe.py` and your environment
 
 #### 4. Docker Issues
 
@@ -357,7 +382,7 @@ docker-compose down
 If you continue to experience issues:
 1. Check Modal's [documentation](https://modal.com/docs)
 2. Verify your Modal account status and credits
-3. Review the Modal app logs: `modal app logs example-whisperx-transcribe`
+3. Review the Modal app logs: `modal app logs modal-whisper-transcribe`
 
 ## Limitations
 

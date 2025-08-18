@@ -1,31 +1,35 @@
 # ---
 # lambda-test: false  # requires audio file
 # ---
-# # WhisperX transcription with word-level timestamps
+# # Modal Whisper Transcribe
 #
-# This example shows how to run [WhisperX](https://github.com/m-bain/whisperX) on
-# Modal for accurate, word-level timestamped transcription.
+# A Modal application for running [WhisperX](https://github.com/m-bain/whisperX)
+# transcription with accurate, word-level timestamps.
 #
-# We’ll walk through the following steps:
+# This application provides:
 #
-# 1. Defining the container image with CUDA 12.8, cuDNN 8, FFmpeg and Python deps.
-# 2. Persisting model weights to a [Modal Volume](https://modal.com/docs/reference/modal.Volume).
+# 1. A containerized environment with CUDA 12.8, cuDNN 8, FFmpeg and Python dependencies.
+# 2. Persistent model weights using [Modal Volume](https://modal.com/docs/reference/modal.Volume).
 # 3. A [Modal Cls](https://modal.com/docs/reference/modal.App#cls) that loads WhisperX once per GPU instance.
-# 4. A [local entrypoint](https://modal.com/docs/reference/modal.App#local_entrypoint) that uploads an audio file to the service.
+# 4. A [local entrypoint](https://modal.com/docs/reference/modal.App#local_entrypoint) for testing and development.
 #
-# ## Defining image
+# ## Container Image
 #
-# We start from NVIDIA’s official CUDA 12.8 devel image, add cuDNN, FFmpeg, and
-# install the WhisperX Python package plus its numerical deps.
+# The container is built from NVIDIA's official CUDA 12.8 devel image with cuDNN, FFmpeg,
+# and the WhisperX Python package plus numerical dependencies.
 #
 
 import os
 import tempfile
-from typing import Dict
+from typing import Dict, Optional
 
 import modal
 
 MODEL_CACHE_DIR = "/whisperx-cache"
+
+# Configuration from environment variables
+GPU_TYPE = os.getenv("WHISPERX_GPU", "T4")
+MODEL_NAME = os.getenv("WHISPERX_MODEL", "large-v2")
 
 image = (
     modal.Image.from_registry(
@@ -50,7 +54,7 @@ image = (
 # ## Defining the app
 #
 # Downloaded weights live in a [Modal Volume](https://modal.com/docs/reference/modal.Volume) so subsequent runs reuse them.
-app = modal.App("example-whisperx-transcribe", image=image)
+app = modal.App("modal-whisper-transcribe", image=image)
 models_volume = modal.Volume.from_name("whisperx-models", create_if_missing=True)
 
 
@@ -59,7 +63,7 @@ models_volume = modal.Volume.from_name("whisperx-models", create_if_missing=True
 # We wrap WhisperX inference in a Modal Cls.
 # A single GPU container can serve multiple concurrent requests.
 @app.cls(
-    gpu="T4",
+    gpu=GPU_TYPE,
     image=image,
     volumes={MODEL_CACHE_DIR: models_volume},
     timeout=30 * 60,
@@ -73,18 +77,25 @@ class WhisperX:
         import whisperx
 
         self.model = whisperx.load_model(
-            "large-v2",
+            MODEL_NAME,
             device="cuda",
             compute_type="float16",
             download_root=MODEL_CACHE_DIR,
         )
+        self.device = "cuda"
         print("✅ Model ready!")
 
     @modal.method()
-    def transcribe(self, audio_data: bytes) -> Dict:
+    def transcribe(self, audio_data: bytes, language: Optional[str] = None) -> Dict:
         """
         Transcribe an audio file passed in as raw bytes.
-        Returns language, per-word segments, and total duration.
+        
+        Args:
+            audio_data: Raw audio file bytes
+            language: Optional language code (ISO-639-1). If None, language will be auto-detected.
+        
+        Returns:
+            Dictionary with language, per-word segments, and total duration.
         """
 
         import whisperx
@@ -95,14 +106,18 @@ class WhisperX:
 
         try:
             audio = whisperx.load_audio(temp_audio_path)
-            result = self.model.transcribe(audio, batch_size=16, language="de")
-
-            language = result.get("language", "de")
+            # Use provided language or let WhisperX auto-detect
+            transcribe_kwargs = {"batch_size": 16}
+            if language:
+                transcribe_kwargs["language"] = language
+            
+            result = self.model.transcribe(audio, **transcribe_kwargs)
+            detected_language = result.get("language", language or "unknown")
 
             if result["segments"]:
                 try:
                     align_model, metadata = whisperx.load_align_model(
-                        language_code=language,
+                        language_code=detected_language,
                         device=self.device,
                         model_dir=MODEL_CACHE_DIR,
                     )
@@ -113,7 +128,7 @@ class WhisperX:
                     print(f"⚠️ Alignment failed: {e} — falling back to segment-level")
 
             return {
-                "language": language,
+                "language": detected_language,
                 "segments": result["segments"],
                 "duration": len(audio) / 16_000,  # audio is 16 kHz
             }
@@ -131,9 +146,9 @@ class WhisperX:
 # - using a link to an audio file
 #
 # ```bash
-# modal run whisperx_transcribe.py --audio-file audio.wav # uses a local audio file
-# modal run whisperx_transcribe.py --audio-link https://example.com/audio.wav # uses a link to an audio file
-# modal run whisperx_transcribe.py # uses a default public audio file
+# modal run modal_whisper_transcribe.py --audio-file audio.wav # uses a local audio file
+# modal run modal_whisper_transcribe.py --audio-link https://example.com/audio.wav # uses a link to an audio file
+# modal run modal_whisper_transcribe.py # uses a default public audio file
 # ```
 #
 @app.local_entrypoint()

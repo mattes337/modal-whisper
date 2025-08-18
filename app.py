@@ -15,7 +15,7 @@ app = FastAPI(title="Modal WhisperX API", description="OpenAI Whisper API compat
 # Initialize Modal app connection
 try:
     # Get Modal app name from environment variable
-    modal_app_name = os.getenv("MODAL_APP_NAME", "example-whisperx-transcribe")
+    modal_app_name = os.getenv("MODAL_APP_NAME", "modal-whisper-transcribe")
     
     # Try newer Modal API first
     try:
@@ -65,7 +65,7 @@ async def create_transcription(
         whisperx_cls = modal.Cls.from_name(modal_app_name, "WhisperX")
         
         # Call WhisperX transcription via Modal
-        result = whisperx_cls().transcribe.remote(audio_data)
+        result = whisperx_cls().transcribe.remote(audio_data, language)
         
         # Format response based on requested format
         if response_format == "json":

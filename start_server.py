@@ -56,7 +56,7 @@ def check_modal_setup():
         print("✅ Modal package is installed")
         
         # Try to check if the app exists
-        modal_app_name = os.getenv("MODAL_APP_NAME", "example-whisperx-transcribe")
+        modal_app_name = os.getenv("MODAL_APP_NAME", "modal-whisper-transcribe")
         
         try:
             # This will work if Modal is authenticated and app exists
@@ -69,7 +69,7 @@ def check_modal_setup():
             print("\n📋 To fix this:")
             print("   1. Install Modal CLI: pip install modal")
             print("   2. Authenticate: modal token new")
-            print("   3. Deploy app: modal deploy whisperx_transcribe.py")
+            print("   3. Deploy app: modal deploy modal_whisper_transcribe.py")
             print("   4. Verify: modal app list (app will show as deployed, not running)")
             print("\n📖 See README.md Troubleshooting section for details")
             print("\n⚡ Server will start anyway, but transcription endpoints will fail")

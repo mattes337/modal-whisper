@@ -79,7 +79,7 @@ def test_transcription_json(base_url):
             error_text = response.text
             if "Function has not been hydrated" in error_text:
                 print("❌ Modal app not deployed or connection issue!")
-                print("💡 Solution: Run 'modal deploy whisperx_transcribe.py' first")
+                print("💡 Solution: Run 'modal deploy modal_whisper_transcribe.py' first")
                 print("📖 Note: Modal apps start automatically on-demand, no need to keep them running")
                 print("📖 See README.md Troubleshooting section for details")
             else:
@@ -114,7 +114,7 @@ def test_transcription_verbose(base_url):
             error_text = response.text
             if "Function has not been hydrated" in error_text:
                 print("❌ Modal app not deployed or connection issue!")
-                print("💡 Solution: Run 'modal deploy whisperx_transcribe.py' first")
+                print("💡 Solution: Run 'modal deploy modal_whisper_transcribe.py' first")
                 print("📖 Note: Modal apps start automatically on-demand, no need to keep them running")
                 print("📖 See README.md Troubleshooting section for details")
             else:
@@ -174,7 +174,7 @@ def main():
     elif passed >= 2:  # Health and root endpoints passed
         print("⚠️  Basic API is working, but transcription failed.")
         print("💡 This usually means Modal app is not deployed.")
-        print("🔧 Run: modal deploy whisperx_transcribe.py")
+        print("🔧 Run: modal deploy modal_whisper_transcribe.py")
         print("📖 See README.md Troubleshooting section for help.")
     else:
         print("❌ API server may not be running or accessible.")
