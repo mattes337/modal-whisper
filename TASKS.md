@@ -1,0 +1,7 @@
+- Create a python webserver that accepts transcription requests via HTTP
+- Use the schema described in REST.md - exactly rebuilding the OpenAI Whisper API for compatibility
+- Internally use modal to run the WhisperX model
+- The webserver should be able to handle multiple requests at the same time
+- The webserver should be able to return the transcription results in the same format as OpenAI's Whisper API - but its not required to have all properties set or filled correctly
+-- The main importance lies on the timecoded transcriptions
+- The webserver should for now only implement json response format
