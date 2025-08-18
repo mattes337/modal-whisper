@@ -56,6 +56,7 @@ image = (
         "numpy==2.0.2",
         "scipy==1.15.0",
         "python-dotenv>=1.0.0",  # for loading environment variables
+        "requests>=2.25.0",  # for webhook calls
     )
     # Tell HF & Torch to cache inside our Volume
     .env({"HF_HOME": MODEL_CACHE_DIR})
@@ -103,13 +104,14 @@ class WhisperX:
         print("✅ Model ready!")
 
     @modal.method()
-    def transcribe(self, audio_data: bytes, language: Optional[str] = None) -> Dict:
+    def transcribe(self, audio_data: bytes, language: Optional[str] = None, webhook_url: Optional[str] = None) -> Dict:
         """
         Transcribe an audio file passed in as raw bytes.
         
         Args:
             audio_data: Raw audio file bytes
             language: Optional language code (ISO-639-1). If None, language will be auto-detected.
+            webhook_url: Optional webhook URL to POST the result to when transcription is complete.
         
         Returns:
             Dictionary with language, per-word segments, and total duration.
@@ -144,11 +146,27 @@ class WhisperX:
                 except Exception as e:
                     print(f"⚠️ Alignment failed: {e} — falling back to segment-level")
 
-            return {
+            result_data = {
                 "language": detected_language,
                 "segments": result["segments"],
                 "duration": len(audio) / 16_000,  # audio is 16 kHz
             }
+            
+            # Call webhook if provided
+            if webhook_url:
+                try:
+                    import requests
+                    response = requests.post(
+                        webhook_url,
+                        json=result_data,
+                        headers={"Content-Type": "application/json"},
+                        timeout=30
+                    )
+                    print(f"✅ Webhook called successfully: {response.status_code}")
+                except Exception as e:
+                    print(f"⚠️ Webhook call failed: {e}")
+            
+            return result_data
 
         finally:
             if os.path.exists(temp_audio_path):

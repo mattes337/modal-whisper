@@ -76,6 +76,7 @@ A FastAPI webserver that provides OpenAI Whisper API compatibility using Modal a
 - `response_format`: `json` (default) or `verbose_json`
 - `temperature`: Sampling temperature (default: 0.0)
 - `language`: ISO-639-1 language code (auto-detected if not provided)
+- `webhook_url`: URL to POST the transcription result to when processing is complete
 
 #### Example Usage
 
@@ -92,6 +93,13 @@ curl -X POST "http://localhost:8000/v1/audio/transcriptions" \
   -F "file=@audio.mp3" \
   -F "model=whisper-1" \
   -F "response_format=verbose_json"
+
+# With webhook notification
+curl -X POST "http://localhost:8000/v1/audio/transcriptions" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@audio.mp3" \
+  -F "model=whisper-1" \
+  -F "webhook_url=https://your-server.com/webhook"
 ```
 
 #### Response Formats
@@ -311,6 +319,39 @@ docker-compose logs -f
 
 # Stop service
 docker-compose down
+```
+
+## Webhook Testing
+
+To test webhook functionality, use the included test webhook server:
+
+1. **Start the webhook test server**:
+   ```bash
+   python test_webhook.py
+   ```
+   This starts a server on `http://localhost:8001`
+
+2. **Test transcription with webhook**:
+   ```bash
+   curl -X POST "http://localhost:8000/v1/audio/transcriptions" \
+     -H "Content-Type: multipart/form-data" \
+     -F "file=@audio.mp3" \
+     -F "model=whisper-1" \
+     -F "webhook_url=http://localhost:8001/webhook"
+   ```
+
+3. **Check webhook results**:
+   - Results are logged to console
+   - Results are saved as JSON files with timestamps
+   - The webhook server responds with a confirmation
+
+**Webhook Payload**: The webhook receives a POST request with the same JSON structure as the transcription response:
+```json
+{
+  "language": "en",
+  "segments": [...],
+  "duration": 12.34
+}
 ```
 
 ## Troubleshooting

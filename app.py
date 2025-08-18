@@ -35,11 +35,15 @@ async def create_transcription(
     prompt: Optional[str] = Form(None),
     response_format: Optional[str] = Form("json"),
     temperature: Optional[float] = Form(0.0),
-    language: Optional[str] = Form(None)
+    language: Optional[str] = Form(None),
+    webhook_url: Optional[str] = Form(None)
 ):
     """
     Transcribe audio file using WhisperX via Modal.
     Compatible with OpenAI Whisper API format.
+    
+    Optional webhook_url parameter: If provided, the transcription result
+    will be POSTed to this URL when processing is complete.
     """
     
     # Validate model
@@ -61,7 +65,7 @@ async def create_transcription(
         whisperx_cls = modal.Cls.from_name(modal_app_name, "WhisperX")
         
         # Call WhisperX transcription via Modal
-        result = whisperx_cls().transcribe.remote(audio_data, language)
+        result = whisperx_cls().transcribe.remote(audio_data, language, webhook_url)
         
         # Format response based on requested format
         if response_format == "json":

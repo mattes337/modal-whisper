@@ -1,8 +1,9 @@
-- Create a python webserver that accepts transcription requests via HTTP
-- Use the schema described in REST.md - exactly rebuilding the OpenAI Whisper API for compatibility
-- Internally use modal to run the WhisperX model
-- The webserver should be able to handle multiple requests at the same time
-- The webserver should be able to return the transcription results in the same format as OpenAI's Whisper API - but its not required to have all properties set or filled correctly
--- The main importance lies on the timecoded transcriptions
-- The webserver should for now only implement json response format
-- Implement a dockerfile and a docker compose file that installs all requirements like modal and runs the webserver
+- Create a python webserver that accepts transcription requests via HTTP ✅
+- Use the schema described in REST.md - exactly rebuilding the OpenAI Whisper API for compatibility ✅
+- Internally use modal to run the WhisperX model ✅
+- The webserver should be able to handle multiple requests at the same time ✅
+- The webserver should be able to return the transcription results in the same format as OpenAI's Whisper API - but its not required to have all properties set or filled correctly ✅
+-- The main importance lies on the timecoded transcriptions ✅
+- The webserver should for now only implement json response format ✅
+- Implement a dockerfile and a docker compose file that installs all requirements like modal and runs the webserver ✅
+- Add optional webhook URL parameter to POST transcription results when processing is complete ✅

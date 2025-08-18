@@ -130,6 +130,85 @@ def test_transcription_verbose(base_url):
         print(f"Verbose JSON transcription test failed: {e}")
         return False
 
+def test_webhook_functionality(base_url):
+    """Test webhook functionality with a simple HTTP server"""
+    print("Testing webhook functionality...")
+    try:
+        import threading
+        import time
+        from http.server import HTTPServer, BaseHTTPRequestHandler
+        import json
+        
+        # Store webhook data
+        webhook_data = {"received": False, "data": None}
+        
+        class WebhookHandler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                if self.path == '/webhook':
+                    content_length = int(self.headers['Content-Length'])
+                    post_data = self.rfile.read(content_length)
+                    webhook_data["data"] = json.loads(post_data.decode('utf-8'))
+                    webhook_data["received"] = True
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "received"}).encode())
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+            
+            def log_message(self, format, *args):
+                pass  # Suppress server logs
+        
+        # Start webhook server in background
+        webhook_port = 8002
+        server = HTTPServer(('localhost', webhook_port), WebhookHandler)
+        server_thread = threading.Thread(target=server.serve_request)
+        server_thread.daemon = True
+        server_thread.start()
+        
+        # Test transcription with webhook
+        audio_data = create_test_audio()
+        files = {'file': ('test.wav', audio_data, 'audio/wav')}
+        data = {
+            'model': 'whisper-1',
+            'response_format': 'json',
+            'webhook_url': f'http://localhost:{webhook_port}/webhook'
+        }
+        
+        print(f"Sending transcription request with webhook URL...")
+        response = requests.post(f"{base_url}/v1/audio/transcriptions", files=files, data=data)
+        
+        if response.status_code == 200:
+            print(f"Transcription request successful: {response.status_code}")
+            
+            # Wait for webhook (up to 30 seconds)
+            for i in range(30):
+                if webhook_data["received"]:
+                    break
+                time.sleep(1)
+            
+            server.shutdown()
+            
+            if webhook_data["received"]:
+                print("✅ Webhook received successfully!")
+                data = webhook_data["data"]
+                print(f"Webhook data: language={data.get('language')}, segments={len(data.get('segments', []))}")
+                return True
+            else:
+                print("❌ Webhook was not received within 30 seconds")
+                return False
+        else:
+            server.shutdown()
+            print(f"Transcription request failed: {response.status_code}")
+            print(f"Response: {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"Webhook test failed: {e}")
+        return False
+
 def main():
     """Run all tests"""
     import os
@@ -146,7 +225,8 @@ def main():
         test_health_endpoint,
         test_root_endpoint,
         test_transcription_json,
-        test_transcription_verbose
+        test_transcription_verbose,
+        test_webhook_functionality
     ]
     
     results = []
@@ -164,6 +244,7 @@ def main():
     print(f"Root Endpoint: {'PASS' if results[1] else 'FAIL'}")
     print(f"JSON Transcription: {'PASS' if results[2] else 'FAIL'}")
     print(f"Verbose JSON Transcription: {'PASS' if results[3] else 'FAIL'}")
+    print(f"Webhook Functionality: {'PASS' if results[4] else 'FAIL'}")
     
     passed = sum(results)
     total = len(results)
