@@ -140,6 +140,23 @@ Returns service information and available endpoints.
 - **WhisperX model deployed on Modal** (using the provided `whisperx_transcribe.py`)
 - Docker and Docker Compose (for containerized deployment)
 
+## Environment Configuration
+
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit `.env` and fill in your Modal credentials:
+   ```bash
+   MODAL_TOKEN_ID=your_modal_token_id_here
+   MODAL_TOKEN_SECRET=your_modal_token_secret_here
+   MODAL_ENVIRONMENT=main
+   MODAL_APP_NAME=example-whisperx-transcribe
+   ```
+
+3. Get your Modal credentials from [Modal Settings](https://modal.com/settings)
+
 ## Implementation Status
 
 **✅ Production Ready Features:**

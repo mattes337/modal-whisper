@@ -7,6 +7,10 @@ Handles Python version compatibility and provides clear error messages.
 import sys
 import subprocess
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 def check_python_version():
     """Check if Python version is compatible"""
@@ -45,15 +49,19 @@ def check_dependencies():
 
 def start_server():
     """Start the FastAPI server"""
+    # Get host and port from environment variables
+    host = os.getenv("HOST", "0.0.0.0")
+    port = os.getenv("PORT", "8000")
+    
     print("\n🚀 Starting Modal WhisperX API server...")
-    print("📍 Server will be available at: http://localhost:8000")
-    print("📖 API documentation at: http://localhost:8000/docs")
-    print("❤️  Health check at: http://localhost:8000/health")
+    print(f"📍 Server will be available at: http://localhost:{port}")
+    print(f"📖 API documentation at: http://localhost:{port}/docs")
+    print(f"❤️  Health check at: http://localhost:{port}/health")
     print("\n⏹️  Press Ctrl+C to stop the server\n")
     
     try:
         # Use subprocess to avoid Python version compatibility issues
-        cmd = [sys.executable, "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+        cmd = [sys.executable, "-m", "uvicorn", "app:app", "--host", host, "--port", port, "--reload"]
         subprocess.run(cmd)
     except KeyboardInterrupt:
         print("\n\n👋 Server stopped by user")
@@ -62,7 +70,8 @@ def start_server():
         print("\n💡 Troubleshooting tips:")
         print("   1. Make sure all dependencies are installed: pip install -r requirements.txt")
         print("   2. Try using Python 3.11 or 3.12 if you're using Python 3.13+")
-        print("   3. Check if port 8000 is already in use")
+        print(f"   3. Check if port {port} is already in use")
+        print("   4. Check your .env file for correct HOST and PORT settings")
         return False
     
     return True

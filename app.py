@@ -4,19 +4,26 @@ from typing import Optional, Annotated
 from pydantic import BaseModel, Field
 import tempfile
 import os
+from dotenv import load_dotenv
 import modal
 from whisperx_transcribe import WhisperX
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = FastAPI(title="Modal WhisperX API", description="OpenAI Whisper API compatible transcription service using Modal and WhisperX")
 
 # Initialize Modal app connection
 try:
+    # Get Modal app name from environment variable
+    modal_app_name = os.getenv("MODAL_APP_NAME", "example-whisperx-transcribe")
+    
     # Try newer Modal API first
     try:
-        modal_app = modal.App.lookup("example-whisperx-transcribe")
+        modal_app = modal.App.lookup(modal_app_name)
     except AttributeError:
         # Fallback to older API
-        modal_app = modal.App.from_name("example-whisperx-transcribe", create_if_missing=False)
+        modal_app = modal.App.from_name(modal_app_name, create_if_missing=False)
     USE_MODAL = True
 except Exception as e:
     print(f"Warning: Could not connect to Modal app: {e}")
@@ -127,4 +134,6 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host=host, port=port)
