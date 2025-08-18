@@ -75,6 +75,16 @@ def test_transcription_json(base_url):
         if response.status_code == 200:
             print(f"Response: {response.json()}")
             return True
+        elif response.status_code == 500:
+            error_text = response.text
+            if "Function has not been hydrated" in error_text:
+                print("❌ Modal app not deployed or connection issue!")
+                print("💡 Solution: Run 'modal deploy whisperx_transcribe.py' first")
+                print("📖 Note: Modal apps start automatically on-demand, no need to keep them running")
+                print("📖 See README.md Troubleshooting section for details")
+            else:
+                print(f"Server Error: {error_text}")
+            return False
         elif response.status_code == 503:
             print("Modal service not available (expected in development without Modal setup)")
             return True  # This is expected behavior
@@ -100,6 +110,16 @@ def test_transcription_verbose(base_url):
         if response.status_code == 200:
             print(f"Response: {json.dumps(response.json(), indent=2)}")
             return True
+        elif response.status_code == 500:
+            error_text = response.text
+            if "Function has not been hydrated" in error_text:
+                print("❌ Modal app not deployed or connection issue!")
+                print("💡 Solution: Run 'modal deploy whisperx_transcribe.py' first")
+                print("📖 Note: Modal apps start automatically on-demand, no need to keep them running")
+                print("📖 See README.md Troubleshooting section for details")
+            else:
+                print(f"Server Error: {error_text}")
+            return False
         elif response.status_code == 503:
             print("Modal service not available (expected in development without Modal setup)")
             return True  # This is expected behavior
@@ -112,7 +132,9 @@ def test_transcription_verbose(base_url):
 
 def main():
     """Run all tests"""
-    base_url = "http://localhost:8000"
+    import os
+    port = os.getenv('PORT', '8000')
+    base_url = f"http://localhost:{port}"
     
     print("Modal WhisperX API Test Suite")
     print("=" * 40)
@@ -149,8 +171,14 @@ def main():
     
     if passed == total:
         print("🎉 All tests passed! The API is working correctly.")
+    elif passed >= 2:  # Health and root endpoints passed
+        print("⚠️  Basic API is working, but transcription failed.")
+        print("💡 This usually means Modal app is not deployed.")
+        print("🔧 Run: modal deploy whisperx_transcribe.py")
+        print("📖 See README.md Troubleshooting section for help.")
     else:
-        print("❌ Some tests failed. Check the server logs for details.")
+        print("❌ API server may not be running or accessible.")
+        print("🔧 Make sure to start the server: uvicorn app:app --host 0.0.0.0 --port 8000")
 
 if __name__ == "__main__":
     main()

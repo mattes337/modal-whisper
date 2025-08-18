@@ -47,6 +47,39 @@ def check_dependencies():
     
     return True
 
+def check_modal_setup():
+    """Check if Modal is set up and app is deployed"""
+    print("\n🔍 Checking Modal setup...")
+    
+    try:
+        import modal
+        print("✅ Modal package is installed")
+        
+        # Try to check if the app exists
+        modal_app_name = os.getenv("MODAL_APP_NAME", "example-whisperx-transcribe")
+        
+        try:
+            # This will work if Modal is authenticated and app exists
+            modal_app = modal.App.lookup(modal_app_name)
+            print(f"✅ Modal app '{modal_app_name}' found")
+            return True
+        except Exception as e:
+            print(f"⚠️  Modal app '{modal_app_name}' not found or not accessible")
+            print("\n🚨 IMPORTANT: Transcription will not work without Modal deployment!")
+            print("\n📋 To fix this:")
+            print("   1. Install Modal CLI: pip install modal")
+            print("   2. Authenticate: modal token new")
+            print("   3. Deploy app: modal deploy whisperx_transcribe.py")
+            print("   4. Verify: modal app list (app will show as deployed, not running)")
+            print("\n📖 See README.md Troubleshooting section for details")
+            print("\n⚡ Server will start anyway, but transcription endpoints will fail")
+            return False
+            
+    except ImportError:
+        print("❌ Modal package not installed")
+        print("💡 Install with: pip install modal")
+        return False
+
 def start_server():
     """Start the FastAPI server"""
     # Get host and port from environment variables
@@ -88,6 +121,9 @@ def main():
     print("\n📦 Checking dependencies...")
     if not check_dependencies():
         sys.exit(1)
+    
+    # Check Modal setup (non-blocking)
+    check_modal_setup()
     
     # Start the server
     start_server()

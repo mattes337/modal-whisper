@@ -6,7 +6,6 @@ import tempfile
 import os
 from dotenv import load_dotenv
 import modal
-from whisperx_transcribe import WhisperX
 
 # Load environment variables from .env file
 load_dotenv()
@@ -62,10 +61,11 @@ async def create_transcription(
         if not USE_MODAL:
             raise HTTPException(status_code=503, detail="Modal service not available. Please ensure Modal app is deployed and accessible.")
         
-        # Get WhisperX instance from Modal
-        transcriber = WhisperX()
-        # Transcribe audio
-        result = transcriber.transcribe.remote(audio_data)
+        # Get reference to the deployed WhisperX class
+        whisperx_cls = modal.Cls.from_name(modal_app_name, "WhisperX")
+        
+        # Call WhisperX transcription via Modal
+        result = whisperx_cls().transcribe.remote(audio_data)
         
         # Format response based on requested format
         if response_format == "json":
