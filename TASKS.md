@@ -5,3 +5,4 @@
 - The webserver should be able to return the transcription results in the same format as OpenAI's Whisper API - but its not required to have all properties set or filled correctly
 -- The main importance lies on the timecoded transcriptions
 - The webserver should for now only implement json response format
+- Implement a dockerfile and a docker compose file that installs all requirements like modal and runs the webserver
