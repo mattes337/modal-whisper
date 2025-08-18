@@ -27,9 +27,19 @@ import modal
 
 MODEL_CACHE_DIR = "/whisperx-cache"
 
+# Load environment variables from local .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 # Configuration from environment variables
 GPU_TYPE = os.getenv("WHISPERX_GPU", "T4")
 MODEL_NAME = os.getenv("WHISPERX_MODEL", "large-v2")
+
+# Create Modal secrets from environment variables
+whisperx_secret = modal.Secret.from_dict({
+    "WHISPERX_GPU": GPU_TYPE,
+    "WHISPERX_MODEL": MODEL_NAME,
+})
 
 image = (
     modal.Image.from_registry(
@@ -45,6 +55,7 @@ image = (
         "whisperx==3.4.0",  # our ASR library
         "numpy==2.0.2",
         "scipy==1.15.0",
+        "python-dotenv>=1.0.0",  # for loading environment variables
     )
     # Tell HF & Torch to cache inside our Volume
     .env({"HF_HOME": MODEL_CACHE_DIR})
@@ -66,6 +77,7 @@ models_volume = modal.Volume.from_name("whisperx-models", create_if_missing=True
     gpu=GPU_TYPE,
     image=image,
     volumes={MODEL_CACHE_DIR: models_volume},
+    secrets=[whisperx_secret],
     timeout=30 * 60,
 )
 class WhisperX:
@@ -75,9 +87,14 @@ class WhisperX:
     def setup(self):
         print("🔄 Loading WhisperX model …")
         import whisperx
+        import os
+
+        # Get model name from environment variables (now available via Modal secrets)
+        model_name = os.getenv("WHISPERX_MODEL", "large-v2")
+        print(f"📦 Using model: {model_name}")
 
         self.model = whisperx.load_model(
-            MODEL_NAME,
+            model_name,
             device="cuda",
             compute_type="float16",
             download_root=MODEL_CACHE_DIR,

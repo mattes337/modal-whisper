@@ -46,10 +46,6 @@ async def create_transcription(
     if model != "whisper-1":
         raise HTTPException(status_code=400, detail="Only 'whisper-1' model is supported")
     
-    # Validate file size (25MB limit)
-    if file.size and file.size > 25 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File size exceeds 25MB limit")
-    
     # Validate response format
     if response_format not in ["json", "verbose_json"]:
         raise HTTPException(status_code=400, detail="Only 'json' and 'verbose_json' response formats are supported")
