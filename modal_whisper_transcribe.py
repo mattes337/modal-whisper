@@ -41,6 +41,9 @@ whisperx_secret = modal.Secret.from_dict({
     "WHISPERX_MODEL": MODEL_NAME,
 })
 
+# Reference the AUTH_TOKEN secret from Modal
+auth_secret = modal.Secret.from_name("AUTH_TOKEN")
+
 image = (
     modal.Image.from_registry(
         "nvidia/cuda:12.8.0-cudnn-devel-ubuntu22.04",
@@ -56,6 +59,8 @@ image = (
         "numpy==2.0.2",
         "scipy==1.15.0",
         "python-dotenv>=1.0.0",  # for loading environment variables
+        "fastapi>=0.104.0",  # for HTTP API
+        "python-multipart>=0.0.6",  # for file uploads
     )
     # Tell HF & Torch to cache inside our Volume
     .env({"HF_HOME": MODEL_CACHE_DIR})
@@ -153,6 +158,115 @@ class WhisperX:
         finally:
             if os.path.exists(temp_audio_path):
                 os.unlink(temp_audio_path)
+
+
+# ## HTTP/REST API
+#
+# We expose a FastAPI web service for HTTP access with AUTH_TOKEN authentication.
+# The service is deployed via Modal's ASGI app feature.
+#
+
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, Header
+from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+web_app = FastAPI(
+    title="Modal WhisperX API",
+    description="WhisperX transcription service with authentication",
+)
+security = HTTPBearer()
+
+
+def verify_auth_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    """Verify the Bearer token against AUTH_TOKEN secret."""
+    expected_token = os.environ.get("AUTH_TOKEN")
+    if not expected_token:
+        raise HTTPException(status_code=500, detail="AUTH_TOKEN not configured")
+
+    if credentials.credentials != expected_token:
+        raise HTTPException(status_code=401, detail="Invalid authentication token")
+
+    return credentials.credentials
+
+
+@web_app.get("/health")
+async def health_check():
+    """Health check endpoint (no auth required)."""
+    return {"status": "healthy", "service": "modal-whisperx"}
+
+
+@web_app.post("/v1/audio/transcriptions")
+async def create_transcription(
+    file: UploadFile = File(...),
+    model: str = Form("whisper-1"),
+    response_format: Optional[str] = Form("json"),
+    language: Optional[str] = Form(None),
+    _token: str = Depends(verify_auth_token),
+):
+    """
+    Transcribe audio file using WhisperX.
+    Compatible with OpenAI Whisper API format.
+
+    Requires Bearer token authentication.
+    """
+    if model != "whisper-1":
+        raise HTTPException(status_code=400, detail="Only 'whisper-1' model is supported")
+
+    if response_format not in ["json", "verbose_json"]:
+        raise HTTPException(status_code=400, detail="Only 'json' and 'verbose_json' formats are supported")
+
+    try:
+        audio_data = await file.read()
+
+        # Get the WhisperX class and call transcribe
+        whisperx_instance = WhisperX()
+        result = whisperx_instance.transcribe.remote(audio_data, language)
+
+        if response_format == "json":
+            full_text = " ".join([seg.get("text", "") for seg in result.get("segments", [])])
+            return JSONResponse(content={"text": full_text.strip()})
+
+        # verbose_json format
+        segments = []
+        for i, segment in enumerate(result.get("segments", [])):
+            segments.append({
+                "id": i,
+                "seek": 0,
+                "start": segment.get("start", 0.0),
+                "end": segment.get("end", 0.0),
+                "text": segment.get("text", ""),
+                "tokens": [],
+                "temperature": 0.0,
+                "avg_logprob": -0.1,
+                "compression_ratio": 1.0,
+                "no_speech_prob": 0.0,
+            })
+
+        full_text = " ".join([seg.get("text", "") for seg in result.get("segments", [])])
+
+        return JSONResponse(content={
+            "task": "transcribe",
+            "language": result.get("language", "en"),
+            "duration": result.get("duration", 0.0),
+            "segments": segments,
+            "text": full_text.strip(),
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+
+
+@app.function(
+    image=image,
+    secrets=[auth_secret],
+)
+@modal.concurrent(max_inputs=100)
+@modal.asgi_app()
+def web_endpoint():
+    """Deploy the FastAPI app as an ASGI web endpoint."""
+    return web_app
 
 
 # ## Command-line usage
