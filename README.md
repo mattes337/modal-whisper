@@ -1,15 +1,17 @@
 # Modal WhisperX API
 
-A FastAPI webserver that provides OpenAI Whisper API compatibility using Modal and WhisperX for high-quality audio transcription with word-level timestamps.
+A FastAPI webserver that provides OpenAI Whisper API compatibility using Modal and WhisperX for high-quality audio transcription with word-level timestamps. Now includes YouTube video transcription and metadata extraction capabilities.
 
 ## Features
 
 - **OpenAI Whisper API Compatible**: Drop-in replacement for OpenAI's transcription API
 - **WhisperX Integration**: Uses WhisperX via Modal for accurate word-level timestamps
+- **YouTube Transcription**: Extract metadata, transcripts, and optionally download YouTube videos
 - **Multiple Response Formats**: Supports both `json` and `verbose_json` formats
 - **Concurrent Processing**: Handles multiple transcription requests simultaneously
 - **Docker Support**: Easy deployment with Docker and Docker Compose
 - **Health Monitoring**: Built-in health check endpoints
+- **Low Resource YouTube Processing**: Optimized for quick metadata and transcript extraction
 
 ## Quick Start
 
@@ -28,10 +30,13 @@ A FastAPI webserver that provides OpenAI Whisper API compatibility using Modal a
    # Deploy WhisperX service - THIS IS REQUIRED!
    modal deploy modal_whisper_transcribe.py
    
+   # Deploy YouTube transcription service - REQUIRED for YouTube features!
+   modal deploy modal_youtube_transcribe.py
+   
    # Verify deployment succeeded
    modal app list
    ```
-   ✅ You should see `modal-whisper-transcribe` listed as a deployed app.
+   ✅ You should see both `modal-whisper-transcribe` and `modal-youtube-transcribe` listed as deployed apps.
 
 2. **Environment Variables** (Optional if using `modal token new`):
    ```bash
@@ -63,7 +68,7 @@ A FastAPI webserver that provides OpenAI Whisper API compatibility using Modal a
 
 ## API Usage
 
-### Transcription Endpoint
+### Audio Transcription Endpoint
 
 **POST** `/v1/audio/transcriptions`
 
@@ -127,11 +132,100 @@ curl -X POST "http://localhost:8000/v1/audio/transcriptions" \
 }
 ```
 
+### YouTube Transcription Endpoint
+
+**POST** `/v1/youtube/transcribe`
+
+Extract metadata, transcripts, and optionally download YouTube videos.
+
+#### Request Body (JSON)
+```json
+{
+  "url": "https://www.youtube.com/watch?v=VIDEO_ID",
+  "download_video": false
+}
+```
+
+#### Parameters
+- `url` (required): YouTube URL, short URL, or video ID
+- `download_video` (optional): Whether to download the video file (default: false)
+
+#### Example Usage
+
+```bash
+# Extract metadata and transcript only
+curl -X POST "http://localhost:8000/v1/youtube/transcribe" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'
+
+# Extract metadata, transcript, and download video
+curl -X POST "http://localhost:8000/v1/youtube/transcribe" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://youtu.be/dQw4w9WgXcQ", "download_video": true}'
+
+# Using video ID only
+curl -X POST "http://localhost:8000/v1/youtube/transcribe" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "dQw4w9WgXcQ"}'
+```
+
+#### Response Format
+
+```json
+{
+  "success": true,
+  "metadata": {
+    "id": "dQw4w9WgXcQ",
+    "title": "Rick Astley - Never Gonna Give You Up (Official Video)",
+    "description": "The official video for...",
+    "duration": 212,
+    "view_count": 1400000000,
+    "like_count": 15000000,
+    "upload_date": "20091025",
+    "uploader": "Rick Astley",
+    "uploader_id": "RickAstleyVEVO",
+    "channel_url": "https://www.youtube.com/channel/UCuAXFkgsw1L7xaCfnd5JJOw",
+    "thumbnail": "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+    "thumbnails": [...]
+  },
+  "transcript": {
+    "language": "en",
+    "entries": [
+      {
+        "text": "We're no strangers to love",
+        "start": 0.0,
+        "duration": 3.5
+      },
+      ...
+    ]
+  },
+  "transcript_languages": [
+    {
+      "language": "English",
+      "language_code": "en",
+      "is_generated": false,
+      "is_translatable": true
+    }
+  ],
+  "formats": [...],
+  "total_formats": 25,
+  "video_downloaded": false
+}
+```
+
+#### Video Download (Opt-in)
+
+When `download_video: true` is specified:
+- Video is limited to 720p maximum to save bandwidth
+- Video data is returned as base64-encoded string in `video_data` field
+- `video_size_bytes` field indicates the file size
+- **Warning**: Video downloads use significant bandwidth and storage
+
 ### Health Check
 
 **GET** `/health`
 
-Returns service health status.
+Returns service health status including YouTube Modal connection.
 
 ### Service Information
 
@@ -159,6 +253,7 @@ Returns service information and available endpoints.
    MODAL_TOKEN_SECRET=your_modal_token_secret_here
    MODAL_ENVIRONMENT=main
    MODAL_APP_NAME=modal-whisper-transcribe
+   YOUTUBE_MODAL_APP_NAME=modal-youtube-transcribe
    ```
 
 3. Get your Modal credentials from [Modal Settings](https://modal.com/settings)
@@ -186,16 +281,20 @@ Returns service information and available endpoints.
    pip install modal
    modal token new
    ```
-3. **Deploy WhisperX Service** (Critical Step):
+3. **Deploy Services** (Critical Steps):
    ```bash
+   # Deploy WhisperX service
    modal deploy modal_whisper_transcribe.py
+   
+   # Deploy YouTube transcription service
+   modal deploy modal_youtube_transcribe.py
    ```
    
    **Verify deployment**:
    ```bash
    modal app list
    ```
-   You should see `modal-whisper-transcribe` in the list of running apps.
+   You should see both `modal-whisper-transcribe` and `modal-youtube-transcribe` in the list of running apps.
 
 4. **Update App Name** (if needed): Modify the app name in `app.py` if different from "modal-whisper-transcribe"
 

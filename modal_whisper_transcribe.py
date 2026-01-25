@@ -21,9 +21,15 @@
 
 import os
 import tempfile
+import traceback
+import logging
 from typing import Dict, Optional
 
 import modal
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 MODEL_CACHE_DIR = "/whisperx-cache"
 
@@ -46,21 +52,28 @@ auth_secret = modal.Secret.from_name("AUTH_TOKEN")
 
 image = (
     modal.Image.from_registry(
-        "nvidia/cuda:12.8.0-cudnn-devel-ubuntu22.04",
-        add_python="3.12",
+        "nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04",
+        add_python="3.11",
     )
     # ── System deps ─────────────────────────────────────────────────────────────
-    .apt_install("ffmpeg")  # audio decoding / resampling
-    .apt_install("libcudnn8")  # cuDNN runtime
-    .apt_install("libcudnn8-dev")  # cuDNN headers (needed by torch wheels)
+    .apt_install("ffmpeg", "libavcodec-dev", "libavformat-dev", "libavutil-dev")
     # ── Python deps ─────────────────────────────────────────────────────────────
+    # Use torch 2.5.1 as required by whisperx 3.4.0
     .pip_install(
-        "whisperx==3.4.0",  # our ASR library
-        "numpy==2.0.2",
-        "scipy==1.15.0",
-        "python-dotenv>=1.0.0",  # for loading environment variables
-        "fastapi>=0.104.0",  # for HTTP API
-        "python-multipart>=0.0.6",  # for file uploads
+        "torch==2.5.1",
+        "torchaudio==2.5.1",
+    )
+    # Pin pyannote.audio to version that supports use_auth_token
+    .pip_install(
+        "pyannote.audio==3.3.2",
+    )
+    .pip_install(
+        "whisperx==3.4.0",
+        "omegaconf",
+        "matplotlib",  # Required by pyannote.audio
+        "python-dotenv>=1.0.0",
+        "fastapi>=0.104.0",
+        "python-multipart>=0.0.6",
     )
     # Tell HF & Torch to cache inside our Volume
     .env({"HF_HOME": MODEL_CACHE_DIR})
@@ -111,53 +124,72 @@ class WhisperX:
     def transcribe(self, audio_data: bytes, language: Optional[str] = None) -> Dict:
         """
         Transcribe an audio file passed in as raw bytes.
-        
+
         Args:
             audio_data: Raw audio file bytes
             language: Optional language code (ISO-639-1). If None, language will be auto-detected.
-        
+
         Returns:
             Dictionary with language, per-word segments, and total duration.
         """
+        print(f"[DEBUG] transcribe() called with {len(audio_data)} bytes, language={language}")
 
         import whisperx
 
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_audio:
             temp_audio.write(audio_data)
             temp_audio_path = temp_audio.name
+            print(f"[DEBUG] Wrote temp file: {temp_audio_path}")
 
         try:
+            print("[DEBUG] Loading audio...")
             audio = whisperx.load_audio(temp_audio_path)
+            print(f"[DEBUG] Audio loaded, shape: {audio.shape if hasattr(audio, 'shape') else 'N/A'}, len: {len(audio)}")
+
             # Use provided language or let WhisperX auto-detect
             transcribe_kwargs = {"batch_size": 16}
             if language:
                 transcribe_kwargs["language"] = language
-            
+
+            print(f"[DEBUG] Starting transcription with kwargs: {transcribe_kwargs}")
             result = self.model.transcribe(audio, **transcribe_kwargs)
             detected_language = result.get("language", language or "unknown")
+            print(f"[DEBUG] Transcription complete, language: {detected_language}, segments: {len(result.get('segments', []))}")
 
             if result["segments"]:
                 try:
+                    print(f"[DEBUG] Loading alignment model for {detected_language}...")
                     align_model, metadata = whisperx.load_align_model(
                         language_code=detected_language,
                         device=self.device,
                         model_dir=MODEL_CACHE_DIR,
                     )
+                    print("[DEBUG] Running alignment...")
                     result = whisperx.align(
                         result["segments"], align_model, metadata, audio, self.device
                     )
+                    print(f"[DEBUG] Alignment complete, segments: {len(result.get('segments', []))}")
                 except Exception as e:
                     print(f"⚠️ Alignment failed: {e} — falling back to segment-level")
+                    print(f"[DEBUG] Alignment error traceback: {traceback.format_exc()}")
 
+            duration = len(audio) / 16_000
+            print(f"[DEBUG] Returning result with duration: {duration:.2f}s")
             return {
                 "language": detected_language,
                 "segments": result["segments"],
-                "duration": len(audio) / 16_000,  # audio is 16 kHz
+                "duration": duration,
             }
+
+        except Exception as e:
+            print(f"[ERROR] Transcription failed: {e}")
+            print(f"[ERROR] Traceback: {traceback.format_exc()}")
+            raise
 
         finally:
             if os.path.exists(temp_audio_path):
                 os.unlink(temp_audio_path)
+                print(f"[DEBUG] Cleaned up temp file: {temp_audio_path}")
 
 
 # ## HTTP/REST API
@@ -209,21 +241,34 @@ async def create_transcription(
 
     Requires Bearer token authentication.
     """
+    print(f"[DEBUG] /v1/audio/transcriptions called")
+    print(f"[DEBUG] file: {file.filename}, content_type: {file.content_type}, model: {model}")
+    print(f"[DEBUG] response_format: {response_format}, language: {language}")
+
     if model != "whisper-1":
+        print(f"[DEBUG] Rejecting unsupported model: {model}")
         raise HTTPException(status_code=400, detail="Only 'whisper-1' model is supported")
 
     if response_format not in ["json", "verbose_json"]:
+        print(f"[DEBUG] Rejecting unsupported response_format: {response_format}")
         raise HTTPException(status_code=400, detail="Only 'json' and 'verbose_json' formats are supported")
 
     try:
+        print("[DEBUG] Reading audio file...")
         audio_data = await file.read()
+        print(f"[DEBUG] Read {len(audio_data)} bytes from uploaded file")
 
         # Get the WhisperX class and call transcribe
+        print("[DEBUG] Creating WhisperX instance...")
         whisperx_instance = WhisperX()
+        print("[DEBUG] Calling transcribe.remote()...")
         result = whisperx_instance.transcribe.remote(audio_data, language)
+        print(f"[DEBUG] transcribe.remote() returned: {type(result)}")
+        print(f"[DEBUG] Result keys: {result.keys() if isinstance(result, dict) else 'N/A'}")
 
         if response_format == "json":
             full_text = " ".join([seg.get("text", "") for seg in result.get("segments", [])])
+            print(f"[DEBUG] Returning json format, text length: {len(full_text)}")
             return JSONResponse(content={"text": full_text.strip()})
 
         # verbose_json format
@@ -243,6 +288,7 @@ async def create_transcription(
             })
 
         full_text = " ".join([seg.get("text", "") for seg in result.get("segments", [])])
+        print(f"[DEBUG] Returning verbose_json format, {len(segments)} segments, text length: {len(full_text)}")
 
         return JSONResponse(content={
             "task": "transcribe",
@@ -255,12 +301,15 @@ async def create_transcription(
     except HTTPException:
         raise
     except Exception as e:
+        print(f"[ERROR] Transcription endpoint failed: {e}")
+        print(f"[ERROR] Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
 
 @app.function(
     image=image,
     secrets=[auth_secret],
+    timeout=30 * 60,  # 30 minutes to match WhisperX class timeout
 )
 @modal.concurrent(max_inputs=100)
 @modal.asgi_app()

@@ -6,13 +6,19 @@ import tempfile
 import os
 from dotenv import load_dotenv
 import modal
+import requests
+
+# Pydantic models for request validation
+class YouTubeTranscribeRequest(BaseModel):
+    url: str = Field(..., description="YouTube URL or video ID")
+    download_video: bool = Field(False, description="Whether to download the video file (opt-in)")
 
 # Load environment variables from .env file
 load_dotenv()
 
 app = FastAPI(title="Modal WhisperX API", description="OpenAI Whisper API compatible transcription service using Modal and WhisperX")
 
-# Initialize Modal app connection
+# Initialize Modal app connections
 try:
     # Get Modal app name from environment variable
     modal_app_name = os.getenv("MODAL_APP_NAME", "modal-whisper-transcribe")
@@ -27,6 +33,21 @@ try:
 except Exception as e:
     print(f"Warning: Could not connect to Modal app: {e}")
     USE_MODAL = False
+
+# Initialize YouTube transcription Modal app connection
+try:
+    youtube_modal_app_name = os.getenv("YOUTUBE_MODAL_APP_NAME", "modal-youtube-transcribe")
+    
+    # Try newer Modal API first
+    try:
+        youtube_modal_app = modal.App.lookup(youtube_modal_app_name)
+    except AttributeError:
+        # Fallback to older API
+        youtube_modal_app = modal.App.from_name(youtube_modal_app_name, create_if_missing=False)
+    USE_YOUTUBE_MODAL = True
+except Exception as e:
+    print(f"Warning: Could not connect to YouTube Modal app: {e}")
+    USE_YOUTUBE_MODAL = False
 
 @app.post("/v1/audio/transcriptions")
 async def create_transcription(
@@ -106,13 +127,42 @@ async def create_transcription(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
+@app.post("/v1/youtube/transcribe")
+async def youtube_transcribe(request: YouTubeTranscribeRequest):
+    """
+    Transcribe YouTube video and extract metadata.
+    Optionally download the video file (opt-in via download_video parameter).
+    """
+    
+    if not USE_YOUTUBE_MODAL:
+        raise HTTPException(status_code=503, detail="YouTube Modal service not available. Please ensure Modal app is deployed and accessible.")
+    
+    try:
+        # Get reference to the deployed YouTube transcription function
+        youtube_function = modal.Function.lookup(youtube_modal_app_name, "extract_youtube_data")
+        
+        # Call YouTube transcription via Modal
+        result = youtube_function.remote(request.url, request.download_video)
+        
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+        
+        return JSONResponse(content=result)
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"YouTube transcription failed: {str(e)}")
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy", 
         "service": "modal-whisperx",
-        "modal_connected": USE_MODAL
+        "modal_connected": USE_MODAL,
+        "youtube_modal_connected": USE_YOUTUBE_MODAL
     }
 
 @app.get("/")
@@ -124,6 +174,7 @@ async def root():
         "modal_connected": USE_MODAL,
         "endpoints": {
             "transcription": "/v1/audio/transcriptions",
+            "youtube_transcribe": "/v1/youtube/transcribe",
             "health": "/health"
         }
     }
