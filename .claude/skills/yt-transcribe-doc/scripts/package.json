@@ -1,0 +1,9 @@
+{
+  "name": "yt-transcribe-doc-scripts",
+  "private": true,
+  "version": "1.0.0",
+  "description": "DOCX builders for yt-transcribe-doc skill",
+  "dependencies": {
+    "docx": "^9.0.0"
+  }
+}
